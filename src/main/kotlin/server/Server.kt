@@ -8,6 +8,7 @@ import java.nio.channels.*
 import java.nio.channels.CompletionHandler
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume
@@ -31,11 +32,11 @@ suspend fun AsynchronousServerSocketChannel.acceptConnection(): AsynchronousSock
     }
 }
 
-fun createChannel(host : String, port : Int, executor : ExecutorService) : AsynchronousServerSocketChannel
+fun createChannel(address : InetSocketAddress, executor : ExecutorService) : AsynchronousServerSocketChannel
 {
     val group = AsynchronousChannelGroup.withThreadPool(executor);
     val socket = AsynchronousServerSocketChannel.open(group);
-    socket.bind(InetSocketAddress(host, port))
+    socket.bind(address)
     return socket;
 }
 
@@ -48,17 +49,16 @@ fun createChannel(host : String, port : Int, executor : ExecutorService) : Async
  * @property executor
  */
 class Server(
-    private val hostname : String,
-    private val port : Int,
-    private val executor : ExecutorService) {
-
-    private val rooms = ConcurrentHashMap<String, Room>();
+    private val address : InetSocketAddress,
+    private val executor : ExecutorService = Executors.newSingleThreadExecutor()) {
 
     private lateinit var serverLoopJob : Job;
+    private lateinit var serverSocket : AsynchronousServerSocketChannel
+
 
     fun run()
     {
-        val serverSocket = createChannel(hostname, port, executor);
+        serverSocket = createChannel(address, executor);
 
         val scope = CoroutineScope(executor.asCoroutineDispatcher());
 
@@ -73,21 +73,39 @@ class Server(
                 println("New Session!");
                 val session = Session(idGenerator.incrementAndGet(), "King", socket);
                 // Reader Coroutine
-                launch {
-                    while(true)
-                    {
-                        val userInput = session.read(TIMEOUT_DURATION, TimeUnit.SECONDS);
-                        println("got new input!")
-                        if(userInput != null)
-                            session.write(userInput);
+                val rxJob = launch {
+                    try {
+                        while (true) {
+                            val userInput = session.read(TIMEOUT_DURATION, TimeUnit.SECONDS);
+                            //if(userInput != null)
+                            //    session.write(userInput);
+                        }
+                    }
+                    finally {
+
                     }
                 }
                 // Transmitter Coroutine
-                launch {
+                val txJob = launch {
+                    try {
+                        while(true)
+                        {
 
+                        }
+                    }
+                    finally {
+
+                    }
                 }
             }
         }
+    }
+
+    fun shutdownAndJoin()
+    {
+
+        serverSocket.close();
+
     }
 
     private fun pollForAdminCommands()
