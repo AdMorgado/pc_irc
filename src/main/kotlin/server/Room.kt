@@ -1,4 +1,4 @@
-
+package server;
 
 
 class Room {
