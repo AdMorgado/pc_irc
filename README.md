@@ -1,6 +1,5 @@
 # Simple concurrent TCP/IP room chat server
 ### Implemented in Kotlin
-
 ## Implementation
 
 ## Starting the server
