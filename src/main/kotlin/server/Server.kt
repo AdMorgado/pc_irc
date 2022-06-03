@@ -6,11 +6,14 @@ import java.nio.ByteBuffer
 import java.nio.CharBuffer
 import java.nio.channels.*
 import java.nio.channels.CompletionHandler
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+
+const val TIMEOUT_DURATION : Long = 60;
 
 const val COMMAND_SHUTDOWN = "/shutdown"
 
@@ -36,8 +39,21 @@ fun createChannel(host : String, port : Int, executor : ExecutorService) : Async
     return socket;
 }
 
+/**
+ * The server instance will acquire ownership of [executor],
+ * becoming the one responsible of shutting it down once it's job has finished
+ *
+ * @property hostname
+ * @property port
+ * @property executor
+ */
+class Server(
+    private val hostname : String,
+    private val port : Int,
+    private val executor : ExecutorService) {
 
-class Server(private val hostname : String, private val port : Int, private val executor : ExecutorService) {
+    private val rooms = ConcurrentHashMap<String, Room>();
+
 
     fun start()
     {
@@ -55,20 +71,21 @@ class Server(private val hostname : String, private val port : Int, private val 
             while(true) {
 
                 val socket = serverSocket.acceptConnection();
+                println("New Session!");
                 val session = Session(idGenerator.incrementAndGet(), "King", socket);
                 // Reader Coroutine
                 launch {
                     while(true)
                     {
-                        val userInput
+                        val userInput = session.read(TIMEOUT_DURATION, TimeUnit.SECONDS);
+                        println("got new input!")
+                        if(userInput != null)
+                            session.write(userInput);
                     }
                 }
                 // Transmitter Coroutine
                 launch {
-                    while(true) {
 
-                        session.write("Ligmaballs");
-                    }
                 }
             }
         }
