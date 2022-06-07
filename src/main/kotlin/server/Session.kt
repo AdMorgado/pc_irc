@@ -48,10 +48,8 @@ suspend fun Session.read(timeout: Long = 0, unit: TimeUnit = TimeUnit.MILLISECON
             }
             override fun failed(error : Throwable, attachment: Any?) {
                 if(error is InterruptedByTimeoutException) {
-                    println("error 1");
                     continuation.resume(null);
                 } else {
-                    println("error 2");
                     continuation.resumeWithException(error);
                 }
             }
