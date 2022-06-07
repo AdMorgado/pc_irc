@@ -54,16 +54,15 @@ class Server(
 
     private val rooms = ConcurrentHashMap<String, Room>();
 
+    private lateinit var serverLoopJob : Job;
 
-    fun start()
+    fun run()
     {
         val serverSocket = createChannel(hostname, port, executor);
 
         val scope = CoroutineScope(executor.asCoroutineDispatcher());
 
-
-
-        val serverLoopJob = scope.launch {
+        serverLoopJob = scope.launch {
 
             // clientID could be improved and not sequential as to prevent attacks
             val idGenerator = AtomicInteger(0)
@@ -89,15 +88,6 @@ class Server(
                 }
             }
         }
-
-        pollForAdminCommands();
-
-        runBlocking {
-            serverLoopJob.cancelAndJoin();
-        }
-
-        executor.shutdown();
-        executor.awaitTermination(10, TimeUnit.SECONDS);
     }
 
     private fun pollForAdminCommands()
