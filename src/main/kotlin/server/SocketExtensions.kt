@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
 private val encoder = Charsets.UTF_8.newEncoder();
 private val decoder = Charsets.UTF_8.newDecoder();
 
-suspend fun AsynchronousSocketChannel.write(line : String) : Int {
+suspend fun AsynchronousSocketChannel.suspendingWrite(line : String) : Int {
     return suspendCancellableCoroutine { continuation ->
         val toSend = CharBuffer.wrap(line + "\n");
 
@@ -31,16 +31,16 @@ suspend fun AsynchronousSocketChannel.write(line : String) : Int {
     }
 }
 
-suspend fun AsynchronousSocketChannel.read(timeout: Long = 0, unit: TimeUnit = TimeUnit.MILLISECONDS) : String? {
+suspend fun AsynchronousSocketChannel.suspendingRead(timeout: Long = 0, unit: TimeUnit = TimeUnit.MILLISECONDS) : String? {
     return suspendCancellableCoroutine { continuation ->
-
         val buffer = ByteBuffer.allocate(1024); //TODO: Averiguar tamanho do buffer
         read(buffer, timeout, unit, null, object : CompletionHandler<Int, Any?> {
             override fun completed(result: Int, attachment: Any?) {
                 if (continuation.isCancelled) {
                     continuation.resumeWithException(CancellationException())
                 } else {
-                    val received = decoder.decode(buffer).toString();
+                    //TODO: decoder crashes on certain characters, such as Ctrl-C
+                    val received = decoder.decode(buffer.flip()).toString().trim()
                     continuation.resume(received);
                 }
             }
