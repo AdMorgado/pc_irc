@@ -1,6 +1,8 @@
 package server;
 
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.sync.Mutex
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
@@ -11,6 +13,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.locks.ReentrantLock
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -44,68 +47,46 @@ fun createChannel(address : InetSocketAddress, executor : ExecutorService) : Asy
  * The server instance will acquire ownership of [executor],
  * becoming the one responsible of shutting it down once it's job has finished
  *
- * @property hostname
- * @property port
+ * @property address
  * @property executor
  */
 class Server(
     private val address : InetSocketAddress,
     private val executor : ExecutorService = Executors.newSingleThreadExecutor()) {
 
+    private enum class State { NOT_STARTED, STARTED, STOPPED }
+
     private lateinit var serverLoopJob : Job;
     private lateinit var serverSocket : AsynchronousServerSocketChannel
+
+    private val guard = ReentrantLock()
+
+    // Shared Mutable State, guarded by [guard]
+
 
 
     fun run()
     {
-        serverSocket = createChannel(address, executor);
+        serverSocket = createChannel(address, executor)
 
         val scope = CoroutineScope(executor.asCoroutineDispatcher());
-
         serverLoopJob = scope.launch {
-
             // clientID could be improved and not sequential as to prevent attacks
-            val idGenerator = AtomicInteger(0)
+            val idGenerator = AtomicInteger(0);
 
             while(true) {
-
                 val socket = serverSocket.acceptConnection();
                 println("New Session!");
-                val session = Session(idGenerator.incrementAndGet(), "King", socket);
+                val session = Session(idGenerator.incrementAndGet(), Channel(), socket);
                 // Reader Coroutine
-                val rxJob = launch {
-                    try {
-                        while (true) {
-                            val userInput = session.read(TIMEOUT_DURATION, TimeUnit.SECONDS);
-                            //if(userInput != null)
-                            //    session.write(userInput);
-                        }
-                    }
-                    finally {
-
-                    }
-                }
-                // Transmitter Coroutine
-                val txJob = launch {
-                    try {
-                        while(true)
-                        {
-
-                        }
-                    }
-                    finally {
-
-                    }
-                }
+                session.start(this);
             }
         }
     }
 
     fun shutdownAndJoin()
     {
-
         serverSocket.close();
-
     }
 
     private fun pollForAdminCommands()
@@ -121,7 +102,7 @@ class Server(
                     break;
                 }
                 else -> {
-                    println("Unrecognized Command!");
+                    println("Unrecognized Command");
                 }
             }
         }
