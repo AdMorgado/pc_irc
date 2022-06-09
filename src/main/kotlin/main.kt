@@ -19,7 +19,7 @@ const val ENV_NAME_SERVER_PORT = "SERVER_PORT";
 const val DEFAULT_HOST = "localhost";
 const val DEFAULT_PORT = 8888;
 
-private val logger = LoggerFactory.getLogger("Coroutines and NIO")
+private val logger = LoggerFactory.getLogger("pc_irc")
 
 
 fun main(args : Array<String>)
@@ -33,14 +33,23 @@ fun main(args : Array<String>)
     logger.info("Number of Threads: $numOfThreads");
     logger.info("Host: $host, Port: $port");
 
-    // minimum of threads 1 as to always have an available thread to accept connections
     val executor = ThreadPoolExecutor(1, numOfThreads,
         60L, TimeUnit.SECONDS,
         SynchronousQueue())
 
-    val server = Server(host, port, executor);
+    val server = Server(InetSocketAddress(host, port), executor);
 
-    server.start();
+    server.run();
+
+    while(true)
+    {
+        val input = readlnOrNull() ?: break;
+
+        if(input == "/exit")
+            break;
+    }
+
+    server.shutdownAndJoin();
 
     logger.info("Shutting down.")
 }
