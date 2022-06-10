@@ -39,17 +39,19 @@ fun main(args : Array<String>)
 
     val server = Server(InetSocketAddress(host, port), executor);
 
-    server.run();
+    runBlocking {
+        server.run();
 
-    while(true)
-    {
-        val input = readlnOrNull() ?: break;
+        while(true)
+        {
+            val input = readlnOrNull() ?: break;
 
-        if(input == "/exit")
-            break;
+            if(input == "/exit")
+                break;
+        }
+
+        server.shutdownAndJoin();
     }
-
-    server.shutdownAndJoin();
 
     logger.info("Shutting down.")
 }

@@ -3,6 +3,7 @@ package server;
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
+import org.slf4j.LoggerFactory
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
@@ -17,9 +18,7 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-const val TIMEOUT_DURATION : Long = 60;
-
-const val COMMAND_SHUTDOWN = "/shutdown"
+private val logger = LoggerFactory.getLogger(Server::class.java)
 
 suspend fun AsynchronousServerSocketChannel.acceptConnection(): AsynchronousSocketChannel {
     return suspendCancellableCoroutine { continuation ->
@@ -44,6 +43,7 @@ fun createChannel(address : InetSocketAddress, executor : ExecutorService) : Asy
 }
 
 /**
+ *
  * The server instance will acquire ownership of [executor],
  * becoming the one responsible of shutting it down once it's job has finished
  *
@@ -57,54 +57,47 @@ class Server(
     private enum class State { NOT_STARTED, STARTED, STOPPED }
 
     private lateinit var serverLoopJob : Job;
-    private lateinit var serverSocket : AsynchronousServerSocketChannel
+    private lateinit var serverSocket : AsynchronousServerSocketChannel;
 
-    private val guard = ReentrantLock()
-
+    private val guard = Mutex();
     // Shared Mutable State, guarded by [guard]
 
-
-
-    fun run()
+    suspend fun run()
     {
         serverSocket = createChannel(address, executor)
 
         val scope = CoroutineScope(executor.asCoroutineDispatcher());
         serverLoopJob = scope.launch {
-            // clientID could be improved and not sequential as to prevent attacks
-            val idGenerator = AtomicInteger(0);
+            try {
+                // clientID could be improved and not sequential as to prevent attacks
+                val idGenerator = AtomicInteger(0);
 
-            while(true) {
-                val socket = serverSocket.acceptConnection();
-                println("New Session!");
-                val session = Session(idGenerator.incrementAndGet(), Channel(), socket);
-                // Reader Coroutine
-                session.start(this);
+                while(true) {
+                    val socket = serverSocket.acceptConnection();
+                    println("New Session!");
+                    val session = Session(idGenerator.incrementAndGet(), socket);
+                    // Reader Coroutine
+                    session.start(this);
+                }
+            }
+            catch(ex: ClosedChannelException) {
+                logger.info("Channel has closed!")
+            }
+            finally {
+                logger.info("Loop Job Shutting down!");
             }
         }
     }
 
-    fun shutdownAndJoin()
+    suspend fun shutdownAndJoin()
     {
         serverSocket.close();
-    }
+        serverLoopJob.cancelAndJoin();
 
-    private fun pollForAdminCommands()
-    {
-        while(true)
+        executor.shutdown();
+        if(!executor.awaitTermination(10, TimeUnit.SECONDS))
         {
-            val input = readln();
-
-            //TODO: Improve command handling
-            when(input)
-            {
-                COMMAND_SHUTDOWN -> {
-                    break;
-                }
-                else -> {
-                    println("Unrecognized Command");
-                }
-            }
+            executor.shutdownNow();
         }
     }
 }
