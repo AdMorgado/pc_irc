@@ -61,6 +61,7 @@ class Server(
 
     private val guard = Mutex();
     // Shared Mutable State, guarded by [guard]
+    private var state = State.NOT_STARTED
 
     suspend fun run()
     {
