@@ -6,36 +6,61 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.IOException
 import java.nio.channels.AsynchronousSocketChannel
 import java.nio.charset.MalformedInputException
 import java.util.concurrent.TimeUnit
 
 /**
- *
+ * @property id
+ * @property channel
+ * @property socket
  */
 class Session(
     val id : Int,
-    val channel : Channel<Message>,
-    private val socket : AsynchronousSocketChannel)
+    private val socket : AsynchronousSocketChannel
+    private val inputHandler : ((String) -> Unit)? = null)
 {
+    private enum class SessionState {
+        NOT_STARTED, STARTED
+    }
 
-    private lateinit var txJob : Job
-    private lateinit var rxJob : Job
+    private val channel = Channel<Message>();
+
+    val guard = Mutex();
+
+    //shared mutable state guarded by [guard]
+    private var state = SessionState.NOT_STARTED;
+    private lateinit var txJob : Job;
+    private lateinit var rxJob : Job;
 
     suspend fun start(scope : CoroutineScope)
     {
         txJob = startTxJob(scope);
-        rxJob = startRxJob(scope);
+        if(inputHandler != null)
+            rxJob = startRxJob(scope);
+
+        guard.withLock { state = SessionState.STARTED }
     }
 
-    suspend fun startTxJob(scope : CoroutineScope) =
+    suspend fun send(msg : Message)
+    {
+        guard.withLock {
+            check(state === SessionState.STARTED) { "Session $id has not started" };
+        }
+
+        channel.send(msg);
+    }
+
+    private fun startTxJob(scope : CoroutineScope) =
         scope.launch {
             try {
                 socket.use {
                     while (true) {
                         val msg = channel.receive()
-                        println("Sending msg ${msg.text}")
+
                         it.suspendingWrite(msg.text);
                     }
                 }
@@ -48,24 +73,22 @@ class Session(
             }
         }
 
-    suspend fun startRxJob(scope : CoroutineScope) =
+    private fun startRxJob(scope : CoroutineScope) =
         scope.launch {
             try {
                 while (true) {
                     val userInput = socket.suspendingRead(30, TimeUnit.SECONDS);
-                    if (userInput == null) {
-                        break;
-                    }
-
-                    channel.send(Message(userInput));
+                    if (userInput == null) break;
+                    inputHandler?.invoke(userInput);
                 }
             }
             catch(e : IOException) {
                 println("Exception caught in RX for session $id");
+                println(e.message);
                 txJob.cancel(CancellationException("An error occurred while reading from the session socket"))
             }
             finally {
-
+                println("RX $id has stopped!");
             }
         }
 }
