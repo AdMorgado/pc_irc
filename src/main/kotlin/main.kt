@@ -1,15 +1,15 @@
 
-import kotlinx.coroutines.*
+import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
+import server.COMMAND_PROMPT
 import server.Server
+import server.sanitize
+import server.toLineCommand
 import java.net.InetSocketAddress
-import java.nio.channels.AsynchronousChannelGroup
-import java.nio.channels.AsynchronousServerSocketChannel
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 const val ARGS_SINGLE_THREADED = "--single-threaded"
 
@@ -41,16 +41,7 @@ fun main(args : Array<String>)
 
     runBlocking {
         server.run();
-
-        while(true)
-        {
-            val input = readlnOrNull() ?: break;
-
-            if(input == "/exit")
-                break;
-        }
-
-        server.shutdownAndJoin();
+        server.pollForCommands();
     }
 
     logger.info("Shutting down.")

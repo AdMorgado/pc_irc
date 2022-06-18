@@ -1,20 +1,17 @@
 package server;
 
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
 import java.net.InetSocketAddress
-import java.nio.ByteBuffer
-import java.nio.CharBuffer
 import java.nio.channels.*
 import java.nio.channels.CompletionHandler
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.locks.ReentrantLock
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -44,41 +41,56 @@ fun createChannel(address : InetSocketAddress, executor : ExecutorService) : Asy
 
 /**
  *
- * The server instance will acquire ownership of [executor],
- * becoming the one responsible of shutting it down once it's job has finished
+ *  The server instance will acquire ownership of [executor],
+ *  becoming the one responsible of shutting it down once it's job has finished
+ *  This instance is thread-safe
  *
  * @property address
  * @property executor
  */
 class Server(
     private val address : InetSocketAddress,
-    private val executor : ExecutorService = Executors.newSingleThreadExecutor()) {
+    private val executor : ThreadPoolExecutor) {
 
     private enum class State { NOT_STARTED, STARTED, STOPPED }
 
-    private lateinit var serverLoopJob : Job;
-    private lateinit var serverSocket : AsynchronousServerSocketChannel;
+
+    private val sessionManager = SessionManager();
+    private val roomSet = RoomSet();
 
     private val guard = Mutex();
     // Shared Mutable State, guarded by [guard]
+    private lateinit var serverLoopJob : Job;
+    private lateinit var serverSocket : AsynchronousServerSocketChannel;
     private var state = State.NOT_STARTED
 
+    /**
+     *
+     * @throws IllegalStateException if server has already started
+     */
     suspend fun run()
     {
-        serverSocket = createChannel(address, executor)
+        guard.withLock {
+            check(state === State.NOT_STARTED) { "Server can only run in a non started state" }
+            serverSocket = createChannel(address, executor)
+            val scope = CoroutineScope(executor.asCoroutineDispatcher());
 
-        val scope = CoroutineScope(executor.asCoroutineDispatcher());
-        serverLoopJob = scope.launch {
+            serverLoopJob = acceptLoop(scope)
+            state = State.STARTED;
+        }
+    }
+
+    private suspend fun acceptLoop(scope : CoroutineScope) =
+        scope.launch {
             try {
-                // clientID could be improved and not sequential as to prevent attacks
-                val idGenerator = AtomicInteger(0);
-
                 while(true) {
                     val socket = serverSocket.acceptConnection();
                     println("New Session!");
-                    val session = Session(idGenerator.incrementAndGet(), socket);
-                    // Reader Coroutine
-                    session.start(this);
+                    val session = sessionManager.createSession(socket, roomSet);
+                    session.onStop {
+                        sessionManager.removeSession(it.id);
+                    }
+                        .start(this);
                 }
             }
             catch(ex: ClosedChannelException) {
@@ -88,15 +100,59 @@ class Server(
                 logger.info("Loop Job Shutting down!");
             }
         }
+
+    suspend fun pollForCommands()
+    {
+        while(true)
+        {
+            val input = readlnOrNull() ?: break;
+            val sanitizedInput = input.sanitize();
+            val (cmd, args) = sanitizedInput.toLineCommand()
+
+            when(cmd)
+            {
+                "${COMMAND_PROMPT}shutdown" -> {
+                    if(args.isEmpty()) continue;
+                    val timeout = args.first().toLongOrNull() ?: continue
+                    shutdownAndJoin(timeout, TimeUnit.SECONDS)
+                    break;
+                }
+                "${COMMAND_PROMPT}exit" ->  {
+                    shutdown();
+                    break
+                }
+                "${COMMAND_PROMPT}rooms" -> {
+                    logger.info("${roomSet.size} open rooms")
+                }
+                "${COMMAND_PROMPT}threads" -> {
+                    logger.info("${executor.activeCount} active threads")
+                }
+            }
+        }
     }
 
-    suspend fun shutdownAndJoin()
+    private suspend fun shutdown()
     {
+        guard.withLock {
+            check(state === State.STARTED) { "Server can only be shutdown in a started state" }
+            state = State.STOPPED;
+        }
+
+        sessionManager.roaster.forEach { it.stop() }
+
         serverSocket.close();
         serverLoopJob.cancelAndJoin();
+    }
 
-        executor.shutdown();
-        if(!executor.awaitTermination(10, TimeUnit.SECONDS))
+    /**
+     *
+     * @throws IllegalStateException if server has not started already
+     */
+    suspend fun shutdownAndJoin(timeout : Long = 0, unit : TimeUnit = TimeUnit.MILLISECONDS)
+    {
+        shutdown();
+
+        if(!executor.awaitTermination(timeout, unit))
         {
             executor.shutdownNow();
         }

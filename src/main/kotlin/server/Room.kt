@@ -2,29 +2,33 @@ package server;
 
 import java.util.concurrent.ConcurrentHashMap
 
-
+/**
+ * This class is thread-safe
+ */
 class Room {
 
     private val connectedSessions = ConcurrentHashMap<Int, Session>()
 
-    val roaster : List<Session>
+    private val roaster : List<Session>
         get() = connectedSessions.values.toList()
 
-    suspend fun join(session : Session)
+    suspend fun post(msg : String) {
+        roaster.forEach {
+            it.send(HearCommand(msg));
+        }
+    }
+
+    fun join(session : Session)
     {
         connectedSessions[session.id] = session;
     }
 
-    suspend fun leave(session : Session)
+    /**
+     * @return returns null if the session was not present, otherwise the instance of the session
+     */
+    fun leave(sessionId : Int) : Session?
     {
-        connectedSessions.remove(session.id);
-    }
-
-    suspend fun sendMessage(msg : Message)
-    {
-        roaster.forEach {
-            it.send(msg);
-        }
+        return connectedSessions.remove(sessionId);
     }
 }
 

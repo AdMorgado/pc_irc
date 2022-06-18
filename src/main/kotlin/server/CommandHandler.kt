@@ -1,28 +1,28 @@
 package server;
 
-import kotlin.check
-
 const val COMMAND_PROMPT = '/'
+
+const val COMMAND_ENTER = "enter"
+const val COMMAND_LEAVE = "leave"
+const val COMMAND_EXIT = "exit"
 
 /**
  *
  */
-fun String.toCommand() : Command?
+fun String.toCommandOrNull() : Command?
 {
-    //TODO: Add actual sanitization to client input!
-    val sanitized = trim();
-    if(sanitized.isEmpty()) return null;
+    if(isEmpty()) return null;
 
-    check(sanitized.first() == COMMAND_PROMPT);
-    val sanitizedList = sanitized.split(" ");
-    val (cmd, args) = sanitizedList.first() to sanitizedList.drop(1);
+    if(first() != COMMAND_PROMPT)
+        return SayCommand(this);
 
-    //TODO: Improve command decision into a hashmap
-    return when(cmd)
+    val (cmd, args) = toLineCommand()
+
+    return when(cmd.drop(1))
     {
-        "enter" -> EnterCommand(args.first())
-        "leave" -> LeaveCommand()
-        "exit" -> ExitCommand()
+        COMMAND_ENTER -> EnterCommand(args.first())
+        COMMAND_LEAVE -> LeaveCommand()
+        COMMAND_EXIT -> ExitCommand()
         else -> null
     }
 }
