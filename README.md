@@ -4,29 +4,44 @@
 
 ![The architecture of the program](/docs/architecture.png)
 
-
-
 ## Starting the server
+You have the option of running via the Intellij Editor or creating a JAR artifact and running the jar in ```out/artifacts/pc_irc_jar```
+```
+java -jar pc_irc.jar
+```
 
+## Environment Variables
+
+* **SERVER_HOST** the host to be used for the address of the server
+* **SERVER_PORT** the port to be used for the address of the server
+
+## Program arguments
+* **--single-threaded** runs all the server connections in a single thread
+* **--max-users \<maxUsers>** limits the number of users to \<maxUsers>, by default it's 100
 
 ## Connecting to the server
 
+To connect to the server use a console program like **telnet** or **netcat**, targeting the  $SERVER_HOST, $SERVER_PORT address
+
 ## Client Commands
 
+* **raw text** sends a message to a room if  
 * **/enter <room-name>** joins room <room-name>, creating it if necessary
+* **/who** lists the players of the joined room
 * **/leave** leaves the room
 * **/exit** terminates the connection to the server
 
 ## Server Commands
 
-* **/shutdown <timeout>** begins closing the server
+* **/shutdown \<timeout>** begins closing the server, shutting down in \<timeout> seconds
 * **/exit** terminates the server abruptly
+* **/rooms** prints to the console the rooms active and how many sessions in the room
 * **/threads** prints to the console the number of threads active
+* **/sessions** prints to the console how many sessions are connected to the server
 
 ## Credits
-
-* Aluno Adolfo Morgado
-* Professor Paulo Pereira
+Code by Adolfo Morgado 
+Lectured by Professor Paulo Pereira
 
 
 

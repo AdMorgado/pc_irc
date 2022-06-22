@@ -4,8 +4,8 @@ plugins {
     kotlin("jvm") version "1.6.21"
 }
 
-group = "org.example"
-version = "1.0-SNAPSHOT"
+group = "server"
+version = "1.0"
 
 repositories {
     mavenCentral()
@@ -13,7 +13,7 @@ repositories {
 
 dependencies {
     implementation("org.slf4j:slf4j-api:1.7.36")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.2")
     runtimeOnly("org.slf4j:slf4j-simple:1.7.36")
     testImplementation(kotlin("test"))
 }
@@ -25,3 +25,5 @@ tasks.test {
 tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "1.8"
 }
+
+

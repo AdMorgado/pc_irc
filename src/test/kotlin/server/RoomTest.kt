@@ -10,22 +10,18 @@ import java.net.Socket
 import java.nio.channels.AsynchronousServerSocketChannel
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
-import kotlin.test.assertSame
+import kotlin.test.*
 
 class RoomTest {
 
     private val executor = Executors.newSingleThreadExecutor()
 
-
-
     @Test
     fun `Basic Room Behaviour`()
     {
-        val room = Room();
-        assertEquals(0, room.roaster.size) //no users in room
+        val room = Room("");
+        assertEquals(0, room.size) //no users in room
+        assertTrue { room.getPlayerNames().isEmpty() }
 
         runBlocking {
             val serverSocket = createChannel(defaultServerAddress, executor)
@@ -33,15 +29,15 @@ class RoomTest {
             createFakeClientSocket()
 
             val sessionSocket = serverSocket.acceptConnection()
-            val session = Session(0, sessionSocket);
+            val session = Session(0, sessionSocket, RoomSet());
 
             //no clients
-            assertNull(room.leave(session))
+            assertNull(room.leave(session.id))
 
             //1 client
             room.join(session)
-            assertSame(session, room.roaster.first())
-            assertSame(session, room.leave(session))
+            assertTrue {room.getPlayerNames().isNotEmpty() }
+            assertSame(session, room.leave(session.id))
         }
     }
 }
