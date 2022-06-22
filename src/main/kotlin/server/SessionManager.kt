@@ -29,7 +29,6 @@ class SessionManager {
      */
     fun removeSession(id: Int) = openSessions.remove(id)
 
-
     /**
      *  Acquires a list of all open sessions created by this session manager
      */

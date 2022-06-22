@@ -9,6 +9,7 @@ import java.net.InetSocketAddress
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import kotlin.test.assertTrue
 
 class ServerTest {
 
@@ -19,7 +20,12 @@ class ServerTest {
     )
     @Test
     fun `Basic Server Test`() {
-        //val server = Server(defaultServerAddress)
+        val server = Server(defaultServerAddress, executor, 1)
+        runBlocking {
+            server.run()
+            server.sendCommand("/exit")
+            assertTrue { server.hasStopped() }
+        }
     }
 
     @Test
@@ -32,6 +38,11 @@ class ServerTest {
                 server.shutdownAndJoin()
             }
         }
+        assertThrows<IllegalStateException> {
+            runBlocking {
+                server.sendCommand("")
+            }
+        }
 
         runBlocking {
             server.run()
@@ -41,13 +52,6 @@ class ServerTest {
             runBlocking {
                 server.run()
             }
-        }
-    }
-
-    @Test
-    fun `Stress test data races`() {
-        (0 .. 1_000_000).map {
-            val server = Server(defaultServerAddress, executor, 10);
         }
     }
 }

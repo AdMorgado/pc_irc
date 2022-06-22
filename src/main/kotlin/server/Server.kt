@@ -70,6 +70,8 @@ class Server(
     private lateinit var serverSocket: AsynchronousServerSocketChannel
     private var state = State.NOT_STARTED
 
+    suspend fun hasStopped() = guard.withLock { state === State.STOPPED }
+
     /**
      *
      * @throws IllegalStateException if server has already started
@@ -85,6 +87,10 @@ class Server(
         }
     }
 
+    /**
+     * Begins a coroutine responsible of accepting new connections and creating sessions
+     * @return a Job that represent the accept loop coroutine
+     */
     private suspend fun acceptLoop(scope: CoroutineScope) =
         scope.launch {
             try {
@@ -109,26 +115,29 @@ class Server(
             }
         }
 
-    suspend fun pollForCommands() {
-        while (true) {
-            val input = readlnOrNull() ?: break
-            val sanitizedInput = input.sanitize()
-            val (cmd, args) = sanitizedInput.toLineCommand()
-            if (cmd.firstOrNull() != COMMAND_PROMPT) continue
-            when (cmd.drop(1)) {
-                "shutdown" -> {
-                    if (args.isEmpty()) continue
-                    val timeout = args.first().toLongOrNull() ?: continue
-                    shutdownAndJoin(timeout, TimeUnit.SECONDS)
+    /**
+     * Sends a command to be processed by the server, including shutting it down, sending commands is only allowed if
+     * the server is running and has not stopped
+     */
+    suspend fun sendCommand(input : String)  {
+        check(guard.withLock { state } === State.STARTED) { "Server has not started yet or has stopped!" }
+
+        val sanitizedInput = input.sanitize()
+        val (cmd, args) = sanitizedInput.toLineCommand()
+        if (cmd.firstOrNull() != COMMAND_PROMPT) return
+        when (cmd.drop(1)) {
+            "shutdown" -> {
+                if (args.isEmpty()) {
+                    logger.warn("Must pass timeout for shutdown command")
                 }
-                "exit" ->       shutdownAndJoin()
-                "rooms" ->      roomSet.printActiveUsers()
-                "threads" ->    logger.info("${executor.activeCount} active threads")
-                "sessions" ->   logger.info("${sessionManager.roaster.size} clients connected!")
-                else ->         logger.warn("Invalid command!")
+                val timeout = args.first().toLongOrNull() ?: return
+                shutdownAndJoin(timeout, TimeUnit.SECONDS)
             }
-            if (guard.withLock { state } === State.STOPPED)
-                break
+            "exit" ->       shutdownAndJoin()
+            "rooms" ->      roomSet.printActiveUsers()
+            "threads" ->    logger.info("${executor.activeCount} active threads")
+            "sessions" ->   logger.info("${sessionManager.roaster.size} clients connected!")
+            else ->         logger.warn("Invalid command!")
         }
     }
 
@@ -138,10 +147,11 @@ class Server(
             state = State.STOPPED
         }
 
-        sessionManager.roaster.forEach { it.stop() }
+        serverLoopJob.cancelAndJoin()
+
+        sessionManager.roaster.forEach { it.stop() };
 
         serverSocket.close()
-        serverLoopJob.cancelAndJoin()
     }
 
     /**

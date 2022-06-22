@@ -13,8 +13,9 @@ import kotlin.coroutines.resumeWithException
 
 const val INPUT_BUFFER_SIZE = 1024
 
-private val encoder = Charsets.UTF_8.newEncoder()
-private val decoder = Charsets.UTF_8.newDecoder()
+val CHARSET = Charsets.UTF_8
+private val encoder = CHARSET.newEncoder()
+private val decoder = CHARSET.newDecoder()
 
 /**
  *
@@ -39,7 +40,8 @@ suspend fun AsynchronousSocketChannel.suspendingWrite(line: String): Int {
 /**
  *  @param timeout
  *  @param unit
- *  @return returns the string sent by session client, an empty string if TODO
+ *  @return returns the string sent by session client, an empty string if a character coding exception occurred and
+ *  and null if the reading has timed out
  */
 suspend fun AsynchronousSocketChannel.suspendingRead(
     timeout: Long = 0,

@@ -53,7 +53,10 @@ fun main(args: Array<String>) {
 
         runBlocking {
             server.run()
-            server.pollForCommands()
+            while(!server.hasStopped()) {
+                val input = readlnOrNull() ?: break
+                server.sendCommand(input)
+            }
         }
 
     } catch (ex: SQLException) {

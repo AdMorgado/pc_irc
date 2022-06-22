@@ -21,6 +21,7 @@ class RoomSet {
         }
 
     /**
+     * gets a room in the RoomSet, if a room with [roomName] does not exist it creates one with that name
      * @return the room that has been joined
      */
     suspend fun getRoom(roomName: String): Room {
